@@ -6,7 +6,6 @@ from config import (
     W_ASPECT, W_AREA, W_PURITY, CONF_EMA_ALPHA,
 )
 
-# ---- 可选：从 Webots RGB 相机拿一帧 BGR ----
 def get_bgr_from_cam(cam_rgb):
     if cam_rgb is None:
         return None, 0, 0
@@ -19,7 +18,7 @@ def get_bgr_from_cam(cam_rgb):
     bgr = cv2.cvtColor(bgra, cv2.COLOR_BGRA2BGR)
     return bgr, w, h
 
-# ---- 基本图像处理工具 ----
+
 def red_mask(bgr):
     hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
     mask = cv2.inRange(hsv, LOWER_RED_1, UPPER_RED_1) | \
@@ -39,26 +38,17 @@ def purity(mask, cnt):
         return 0.0
     return float((mask[inside] > 0).sum()) / float(inside.sum())
 
-# ---- 新增：是否靠近左右边缘（按画面宽度比例阈值）----
+
 def _near_left_right_edge(x, bw, w, margin_frac=0.05):
-    """
-    如果目标外接框触碰到画面左右边缘的带状区域（各 margin_frac*W），返回 True。
-    例：margin_frac=0.05 表示左右各 5% 宽度。
-    """
+
     margin = int(w * margin_frac)
     left_hits  = x <= margin
     right_hits = (x + bw) >= (w - margin)
     return left_hits or right_hits
 
-# ---- 核心：在一张 BGR 图上检测红色“高而窄”目标 ----
+
 def detect_victim_on_bgr(bgr, conf_prev=0.0):
-    """
-    Args:
-        bgr: np.ndarray(H,W,3), BGR 图像
-        conf_prev: 上一帧平滑置信度（EMA 用）
-    Returns:
-        found(bool), center_px(tuple|None), bbox(x,y,w,h), metrics(dict), conf_next(float)
-    """
+
     if bgr is None:
         return False, None, (0,0,0,0), {"conf_raw":0.0,"purity":0.0,"conf":conf_prev,"img_size":(0,0)}, conf_prev
 
@@ -78,7 +68,7 @@ def detect_victim_on_bgr(bgr, conf_prev=0.0):
 
         x, y, bw, bh = cv2.boundingRect(cnt)
 
-        # ---- 左右边缘直接忽略 ----
+
         # if _near_left_right_edge(x, bw, w, margin_frac=0.05):
         #     continue
 
@@ -132,3 +122,4 @@ def detect_victim_on_bgr(bgr, conf_prev=0.0):
 def detect_victim_from_cam(cam_rgb, conf_prev=0.0):
     bgr, w, h = get_bgr_from_cam(cam_rgb)
     return detect_victim_on_bgr(bgr, conf_prev)
+
