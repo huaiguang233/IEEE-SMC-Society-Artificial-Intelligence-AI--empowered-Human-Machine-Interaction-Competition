@@ -29,7 +29,7 @@ class LidarMapperApp:
 
         self.action_pending = False
         self.last_decision_time = 0.0
-        self.decision_interval = 5.0  # s：两次动作申请的最小间隔
+        self.decision_interval = 5.0
         self.proposed_action = None
 
         # --- modules ---
@@ -51,10 +51,10 @@ class LidarMapperApp:
         # 'sx','sy' are running sums used to compute mean = sx/count, sy/count
         self.victim_candidates = []  # candidates (including confirmed)
         self.confirmed = []  # list of confirmed victims (mean x,y)
-        # params (可按需调整)
-        self.V_MATCH_DIST = 0.8      # m, 新检测与候选匹配阈值
-        self.V_STABLE_COUNT = 3      # 达到多少次观测则认为稳定
-        self.V_STALE_TIMEOUT = 30.0  # s, 多久没更新则删除候选
+        
+        self.V_MATCH_DIST = 0.8  
+        self.V_STABLE_COUNT = 3    
+        self.V_STALE_TIMEOUT = 30.0 
 
         self.victem_flag = False
 
@@ -147,9 +147,9 @@ class LidarMapperApp:
         print(f"[{self.name}] REQUEST: {action} - {payload['reason']}")
 
     def _handle_supervisor_response(self) -> bool:
-        """返回 True=批准；False=未批或拒绝（未批视作还在等）"""
+       
         if not self.supervisor_receiver:
-            return True  # 无监督者设备视作默认批准
+            return True
 
         approved = None
         while self.supervisor_receiver.getQueueLength() > 0:
@@ -159,13 +159,13 @@ class LidarMapperApp:
                 resp = json.loads(raw)
             except json.JSONDecodeError:
                 continue
-            # 只处理发给本机器人的消息
+          
             if resp.get("robot_id") != self.name:
                 continue
             approved = resp.get("approved", False)
 
         if approved is None:
-            # 没有新消息
+        
             return False
         else:
             self.action_pending = False
@@ -180,10 +180,7 @@ class LidarMapperApp:
 
     # -------- simple explore / avoid --------
     def plan_gap_action(self) -> str:
-        """
-        输出一个意图动作而不是直接驱动: "forward" | "turn_left" | "turn_right"
-        逻辑复用你原先的gap选择，但仅返回动作，不落地到电机。
-        """
+
         ranges = self.lidar.getRangeImage()
         if self.lidar_layers > 1:
             ranges = ranges[0:self.lidar_res]
@@ -231,14 +228,14 @@ class LidarMapperApp:
         elif action == "hold":
             self.drive.stop()
         elif action == "investigate_victim":
-            # 简化：先慢速前进靠近
+           
             self.drive.forward(max(0.5, FWD_SPEED*0.5))
         else:
             self.drive.forward(FWD_SPEED*0.5)
 
     # -------- victim tracking helpers --------
     def _match_candidate(self, wx, wy):
-        """找到与 (wx,wy) 最近且距离小于 V_MATCH_DIST 的候选的索引，否则返回 None"""
+        
         best_idx = None
         best_d = None
         for i, c in enumerate(self.victim_candidates):
@@ -251,7 +248,7 @@ class LidarMapperApp:
         return best_idx
 
     def add_detection(self, wx, wy, t):
-        """将一次新的观测加入候选，合并到已有候选或新建候选；可能把候选升级为 confirmed"""
+       
         idx = self._match_candidate(wx, wy)
         if idx is None:
             # 新候选
@@ -263,18 +260,18 @@ class LidarMapperApp:
             }
             self.victim_candidates.append(rec)
         else:
-            # 合并到已有候选（使用 running sum 以保持简单稳定）
+           
             rec = self.victim_candidates[idx]
             rec['sx'] += wx
             rec['sy'] += wy
             rec['count'] += 1
             rec['last_seen'] = float(t)
 
-            # 如果观测足够多且未被确认，则确认并加入 confirmed 列表
+        
             if rec['count'] >= self.V_STABLE_COUNT:
                 mean_x = rec['sx'] / rec['count']
                 mean_y = rec['sy'] / rec['count']
-                # 检查是否已在 confirmed 中（避免重复）
+              
                 already = False
                 for c in self.confirmed:
                     if math.hypot(c[0] - mean_x, c[1] - mean_y) < self.V_MATCH_DIST:
@@ -284,21 +281,18 @@ class LidarMapperApp:
                     print(f"[{self.name}] Confirmed victim at ({mean_x:.2f}, {mean_y:.2f}), count={rec['count']}")
 
     def get_confirmed_victims(self):
-        """返回当前确认（稳定）的受害者平均坐标列表"""
+     
         return list(self.confirmed)
 
     def _nearest_victim_distance(self) -> float:
-        """返回到所有 confirmed 受害者的最近距离；若无则返回 +inf"""
+      
         if not hasattr(self, "confirmed") or not self.confirmed:
             return float("inf")
         x, y, _ = self.get_pose()
         return min(math.hypot(cx - x, cy - y) for (cx, cy) in self.confirmed)
 
     def _proximity_stop_if_needed(self) -> bool:
-        """
-        若与任一已知受害者距离 < 阈值，则停止电机并置为 HOLD。
-        返回 True 表示已停止（本周期不再移动）
-        """
+
         d = self._nearest_victim_distance()
         if d < self.PROX_STOP_DIST:
             self.drive.stop()
@@ -316,12 +310,12 @@ class LidarMapperApp:
             # 1) mapping
             self.grid.update_from_lidar(self.get_pose, self.lidar)
 
-            # 2) 若靠近已确认受害者，优先停住
+
             if self._proximity_stop_if_needed():
                 render_map(self.grid, self.get_pose, self.robot.getTime)
                 continue
 
-            # 3) 受害者检测（先进行感知，再决定是否向人申请动作）
+            # 3) 
             found, center_px, bbox, metrics, self.victim_conf = detect_victim_from_cam(
                 self.cam_rgb, conf_prev=self.victim_conf
             )
@@ -332,7 +326,7 @@ class LidarMapperApp:
                     wx, wy = float(world[0]), float(world[1])
                     print(f"[{self.name}] Detection at {wx:.2f}, {wy:.2f}; adding to tracker.")
                     self.add_detection(wx, wy, t)
-                    # 对“靠近/标注受害者”的动作发起申请（如果没有待批）
+                    
                     if not self.action_pending and (t - self.last_decision_time) >= 0.5:
                         self._send_decision_request("investigate_victim", extra={
                             "victim_found": True,
@@ -341,34 +335,34 @@ class LidarMapperApp:
                         })
                         self.last_decision_time = t
 
-            # 4) 正常探索：规划一个动作意图
+            # 4) 
             planned = self.plan_gap_action()
 
-            # 5) 若当前有待批，尝试读批复；未批就停
+            # 5) 
             if self.action_pending:
                 approved = self._handle_supervisor_response()
                 if approved:
-                    # 批准：执行上次申请的动作（保持到下次覆盖）
+                    # 
                     self.execute_action(self.proposed_action or planned)
                 else:
-                    # 未批或拒绝：先停住（避免乱动），等待下一次循环或超时后重申
+                    # 
                     self.drive.stop()
                 render_map(self.grid, self.get_pose, self.robot.getTime)
-                # 打印确认的受害者（可选）
+                # 
                 if self.confirmed:
                     for i, (cx, cy) in enumerate(self.confirmed):
                         print(f"[{self.name}] Confirmed[{i}] = ({cx:.2f}, {cy:.2f})")
                 continue
 
-            # 6) 没有待批：按节拍发起一次“探索动作”申请
+            # 6) 
             if (t - self.last_decision_time) > self.decision_interval:
                 self._send_decision_request(planned)
                 self.last_decision_time = t
             else:
-                # 在两次申请间隔期，保持上一次动作（或默认跟随当前规划）
+                # 
                 self.execute_action(self.proposed_action or planned)
 
-            # 7) 可视化 + 打印确认受害者（保持你原逻辑）
+            # 7) 
             render_map(self.grid, self.get_pose, self.robot.getTime)
             if self.confirmed:
                 for i, (cx, cy) in enumerate(self.confirmed):
