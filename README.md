@@ -1,5 +1,5 @@
 # IEEE-SMC-Society-Artificial-Intelligence-AI--empowered-Human-Machine-Interaction-Competition
-Team NPU
+From Team NPU
 
 Our main idea was to enable three robots to collaboratively build an occupancy map, where each robot prioritizes exploring areas that have not yet been covered by others, while simultaneously detecting victims. Upon detecting a victim, the robot would broadcast the victim’s coordinates, and the robot team would then perform a bidding process to determine which robot should approach the victim, based on the path cost computed from global occupancy map.
 
